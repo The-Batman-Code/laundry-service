@@ -3,4 +3,13 @@ test-app/node_modules/
 
 # Environment files
 backend/.env*
-test-app/.env* 
+test-app/.env*
+
+# Next.js build artifacts
+test-app/.next/
+test-app/out/
+
+# OS generated files
+.DS_Store
+test-app/.DS_Store
+test-app/src/.DS_Store 
