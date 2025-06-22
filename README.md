@@ -312,45 +312,31 @@ python test_supabase.py
 python init_db.py
 ```
 
-### Environment Variables Checklist
+### Environment Variables
 
 **Backend (.env)**
-- [ ] `SUPABASE_URL`
-- [ ] `SUPABASE_KEY`
-- [ ] `SECRET_KEY` (minimum 32 characters)
-- [ ] `ALGORITHM=HS256`
-- [ ] `ENVIRONMENT=development|production`
+- `SUPABASE_URL`
+- `SUPABASE_KEY`
+- `SECRET_KEY` (minimum 32 characters)
+- `ALGORITHM=HS256`
+- `ENVIRONMENT=development|production`
 
 **Frontend (.env.local)**
-- [ ] `NEXT_PUBLIC_API_URL`
-
-### Deployment Checklist
-
-**Railway Backend:**
-- [ ] Environment variables set
-- [ ] Database accessible
-- [ ] Health check passing
-- [ ] CORS configured for frontend domain
-
-**Vercel Frontend:**
-- [ ] Build succeeding
-- [ ] Environment variables set
-- [ ] API calls working
-- [ ] Routes accessible
+- `NEXT_PUBLIC_API_URL`
 
 ## 📱 Testing
 
-### Manual Testing Checklist
+### Manual Testing
 
-- [ ] User registration works
-- [ ] User login works
-- [ ] Dashboard loads after login
-- [ ] Service types display correctly
-- [ ] Time slots are available
-- [ ] Pickup request creation works
-- [ ] Payment processing works
-- [ ] Invoice generation works
-- [ ] User can view order history
+Test the following functionality:
+- User registration and login
+- Dashboard loading after authentication
+- Service types displaying correctly
+- Time slot availability
+- Pickup request creation
+- Payment processing
+- Invoice generation
+- Order history viewing
 
 ### API Testing
 
