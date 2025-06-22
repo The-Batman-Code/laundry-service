@@ -1,0 +1,9 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/invoice/[id]/page": "/invoice/[id]",
+  "/login/page": "/login",
+  "/dashboard/page": "/dashboard",
+  "/register/page": "/register",
+  "/page": "/",
+  "/dashboard/schedule-pickup/page": "/dashboard/schedule-pickup"
+}
