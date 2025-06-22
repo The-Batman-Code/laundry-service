@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime, timedelta
 from typing import Optional
@@ -15,63 +16,208 @@ from supabase import Client, create_client
 # Load environment variables
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+# Environment validation
+def validate_environment():
+    """Validate required environment variables"""
+    required_vars = {
+        "SUPABASE_URL": os.getenv("SUPABASE_URL"),
+        "SUPABASE_KEY": os.getenv("SUPABASE_KEY"),
+        "SECRET_KEY": os.getenv("SECRET_KEY"),
+        "ALGORITHM": os.getenv("ALGORITHM", "HS256"),
+    }
+
+    missing_vars = [var for var, value in required_vars.items() if not value]
+    if missing_vars:
+        raise ValueError(
+            f"Missing required environment variables: {', '.join(missing_vars)}",
+        )
+
+    # Validate SECRET_KEY length
+    if len(required_vars["SECRET_KEY"]) < 32:
+        raise ValueError("SECRET_KEY must be at least 32 characters long")
+
+    return required_vars
+
+
+# Validate environment on startup
+env_vars = validate_environment()
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Laundry Service API",
     description="API for Laundry Service Application",
     version="1.0.0",
+    docs_url="/docs" if os.getenv("ENVIRONMENT") != "production" else None,
+    redoc_url="/redoc" if os.getenv("ENVIRONMENT") != "production" else None,
 )
 
-# Configure CORS
-origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:4000",  # Added for frontend
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:3001",
-    "http://127.0.0.1:4000",  # Added for frontend
-    "http://localhost:8000",
-]
 
-# Add production origins
-if os.getenv("ENVIRONMENT") == "production":
-    # Add your production frontend URLs here
-    production_origins = [
-        "https://*.vercel.app",
-        "https://*.railway.app",
-        # Add your custom domain when you have one
-        # "https://yourdomain.com",
+# Startup event handler
+@app.on_event("startup")
+async def startup_event() -> None:
+    """Initialize application on startup"""
+    logger.info("🚀 Starting Laundry Service API...")
+    logger.info(f"Environment: {os.getenv('ENVIRONMENT', 'development')}")
+
+    # Initialize database data if needed
+    try:
+        # Check if laundry_types table has data
+        response = supabase.table("laundry_types").select("*").limit(1).execute()
+
+        if not response.data or len(response.data) == 0:
+            logger.info("Initializing laundry types...")
+
+            laundry_types = [
+                {
+                    "id": "regular",
+                    "name": "Regular Laundry",
+                    "price": 159.9,
+                    "description": "Wash, dry, and fold service for everyday clothes",
+                },
+                {
+                    "id": "bag",
+                    "name": "Laundry Bag",
+                    "price": 249.9,
+                    "description": "Fill a bag with as many clothes as possible (up to 10kg)",
+                },
+                {
+                    "id": "shoes",
+                    "name": "Shoes Cleaning",
+                    "price": 129.9,
+                    "description": "Professional cleaning for all types of shoes",
+                },
+                {
+                    "id": "blanket",
+                    "name": "Blanket/Comforter",
+                    "price": 199.9,
+                    "description": "Cleaning service for blankets, comforters, and duvets",
+                },
+                {
+                    "id": "dry_cleaning",
+                    "name": "Dry Cleaning",
+                    "price": 299.9,
+                    "description": "Professional dry cleaning for delicate fabrics",
+                },
+                {
+                    "id": "ironing",
+                    "name": "Ironing Service",
+                    "price": 149.9,
+                    "description": "Professional ironing service for your clothes",
+                },
+            ]
+
+            for laundry_type in laundry_types:
+                try:
+                    supabase.table("laundry_types").insert(laundry_type).execute()
+                except Exception as e:
+                    logger.debug(
+                        f"Laundry type {laundry_type['name']} might already exist: {e}",
+                    )
+
+        # Check if payment_methods table has data
+        response = supabase.table("payment_methods").select("*").limit(1).execute()
+
+        if not response.data or len(response.data) == 0:
+            logger.info("Initializing payment methods...")
+
+            payment_methods = [
+                {
+                    "id": "credit_card",
+                    "name": "Credit Card",
+                    "description": "Pay with Visa, Mastercard, or American Express",
+                },
+                {
+                    "id": "paypal",
+                    "name": "PayPal",
+                    "description": "Pay using your PayPal account",
+                },
+                {
+                    "id": "cash",
+                    "name": "Cash",
+                    "description": "Pay with cash on pickup",
+                },
+            ]
+
+            for payment_method in payment_methods:
+                try:
+                    supabase.table("payment_methods").insert(payment_method).execute()
+                except Exception as e:
+                    logger.debug(
+                        f"Payment method {payment_method['name']} might already exist: {e}",
+                    )
+
+        logger.info("✅ Database initialization completed!")
+
+    except Exception as e:
+        logger.warning(f"Database initialization failed (app will continue): {e}")
+
+    logger.info("🎉 Laundry Service API started successfully!")
+
+
+@app.on_event("shutdown")
+async def shutdown_event() -> None:
+    """Cleanup on shutdown"""
+    logger.info("👋 Shutting down Laundry Service API...")
+
+
+# Configure CORS - Updated for Railway deployment
+def get_cors_origins():
+    """Get CORS origins based on environment"""
+    origins = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:4000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:4000",
+        "http://localhost:8000",
     ]
-    origins.extend(production_origins)
+
+    # Add production origins
+    if os.getenv("ENVIRONMENT") == "production":
+        production_origins = [
+            "https://*.vercel.app",
+            "https://*.railway.app",
+            "https://*.netlify.app",
+        ]
+        # Add custom domain if provided
+        custom_domain = os.getenv("FRONTEND_URL")
+        if custom_domain:
+            origins.append(custom_domain)
+        origins.extend(production_origins)
+
+    return origins
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_origin_regex=r"https://.*\.vercel\.app|https://.*\.railway\.app",  # Allow Vercel and Railway subdomains
+    allow_origins=get_cors_origins(),
+    allow_origin_regex=r"https://.*\.(vercel|railway|netlify)\.app",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Initialize Supabase client
-supabase_url = os.getenv("SUPABASE_URL")
-supabase_key = os.getenv("SUPABASE_KEY")  # Use anon key as originally configured
-
-if not supabase_url or not supabase_key:
-    raise ValueError("SUPABASE_URL and SUPABASE_KEY environment variables are required")
-
-supabase: Client = create_client(supabase_url, supabase_key)
+# Initialize Supabase client with error handling
+try:
+    supabase: Client = create_client(env_vars["SUPABASE_URL"], env_vars["SUPABASE_KEY"])
+    logger.info("Supabase client initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize Supabase client: {e}")
+    raise
 
 # Security
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM")
+SECRET_KEY = env_vars["SECRET_KEY"]
+ALGORITHM = env_vars["ALGORITHM"]
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
-
-if not SECRET_KEY or not ALGORITHM:
-    raise ValueError("SECRET_KEY and ALGORITHM environment variables are required")
 
 
 # Models
@@ -189,7 +335,7 @@ def get_user_by_email(email: str):
         response = supabase.table("users").select("*").eq("email", email).execute()
         return response.data[0] if response.data and len(response.data) > 0 else None
     except Exception as e:
-        print(f"Error in get_user_by_email: {str(e)}")
+        logger.error(f"Error in get_user_by_email: {str(e)}")
         return None
 
 
@@ -221,26 +367,26 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        print(f"Validating token: {token[:10]}...")
+        logger.debug(f"Validating token: {token[:10]}...")
         if not SECRET_KEY or not ALGORITHM:
             raise ValueError("SECRET_KEY and ALGORITHM must be set")
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
         if email is None:
-            print("Email is None in token")
+            logger.debug("Email is None in token")
             raise credentials_exception
         token_data = TokenData(email=email)
     except JWTError as e:
-        print(f"JWT Error: {str(e)}")
+        logger.debug(f"JWT Error: {str(e)}")
         raise credentials_exception
 
     if token_data.email is None:
-        print("Email is None in token_data")
+        logger.debug("Email is None in token_data")
         raise credentials_exception
 
     user = get_user_by_email(token_data.email)
     if user is None:
-        print(f"User not found for email: {token_data.email}")
+        logger.debug(f"User not found for email: {token_data.email}")
         raise credentials_exception
 
     return User(
@@ -255,12 +401,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 # Routes
 @app.post("/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    print(f"Login attempt for user: {form_data.username}")
+    logger.info(f"Login attempt for user: {form_data.username}")
     # Get user from Supabase
     user = get_user_by_email(form_data.username)
 
     if not user:
-        print(f"User not found: {form_data.username}")
+        logger.error(f"User not found: {form_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -268,7 +414,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         )
 
     if not verify_password(form_data.password, user["password"]):
-        print(f"Invalid password for user: {form_data.username}")
+        logger.error(f"Invalid password for user: {form_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -280,18 +426,20 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         data={"sub": user["email"]},
         expires_delta=access_token_expires,
     )
-    print(f"Generated token for user {form_data.username}: {access_token[:10]}...")
+    logger.debug(
+        f"Generated token for user {form_data.username}: {access_token[:10]}...",
+    )
     return {"access_token": access_token, "token_type": "bearer"}
 
 
 @app.post("/users", response_model=User)
 async def create_user(user: UserCreate):
-    print(f"Received registration request for email: {user.email}")
+    logger.info(f"Received registration request for email: {user.email}")
     try:
         # Check if user already exists
         existing_user = get_user_by_email(user.email)
         if existing_user:
-            print(f"User with email {user.email} already exists")
+            logger.warning(f"User with email {user.email} already exists")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email already registered",
@@ -309,14 +457,16 @@ async def create_user(user: UserCreate):
             "created_at": datetime.utcnow().isoformat(),
         }
 
-        print(f"Inserting user data into Supabase: {user_data}")
+        logger.debug(f"Inserting user data into Supabase: {user_data}")
 
         # Try with the regular client
         try:
             response = supabase.table("users").insert(user_data).execute()
-            print(f"Supabase response: {response}")
+            logger.debug(f"Supabase response: {response}")
         except Exception as insert_error:
-            print(f"Error inserting user with regular client: {str(insert_error)}")
+            logger.error(
+                f"Error inserting user with regular client: {str(insert_error)}",
+            )
             # Try direct SQL approach as fallback
             try:
                 # Create user with auth.sign_up
@@ -332,17 +482,17 @@ async def create_user(user: UserCreate):
                         },
                     },
                 )
-                print(f"Auth signup response: {auth_response}")
+                logger.debug(f"Auth signup response: {auth_response}")
 
                 # If auth signup worked, create a user record
                 if auth_response.user and auth_response.user.id:
                     user_data["id"] = auth_response.user.id
                     response = supabase.table("users").insert(user_data).execute()
-                    print(f"Supabase response after auth signup: {response}")
+                    logger.debug(f"Supabase response after auth signup: {response}")
                 else:
                     raise Exception("Auth signup did not return a user")
             except Exception as auth_error:
-                print(f"Error with auth signup approach: {str(auth_error)}")
+                logger.error(f"Error with auth signup approach: {str(auth_error)}")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Failed to create user: {str(auth_error)}",
@@ -355,10 +505,10 @@ async def create_user(user: UserCreate):
             )
 
         created_user = response.data[0]
-        print(f"User created successfully: {created_user}")
+        logger.info(f"User created successfully: {created_user}")
         return User(**created_user)
     except Exception as e:
-        print(f"Error in create_user: {str(e)}")
+        logger.error(f"Error in create_user: {str(e)}")
         if isinstance(e, HTTPException):
             raise
         raise HTTPException(
@@ -478,15 +628,15 @@ async def create_pickup_request(
         "created_at": datetime.utcnow().isoformat(),
     }
 
-    print(f"Creating pickup request with data: {pickup_data}")
+    logger.debug(f"Creating pickup request with data: {pickup_data}")
 
     try:
         # First try with the normal method
         response = supabase.table("pickup_requests").insert(pickup_data).execute()
-        print(f"Pickup request created successfully: {response.data[0]}")
+        logger.info(f"Pickup request created successfully: {response.data[0]}")
         return PickupRequestResponse(**response.data[0])
     except Exception as e:
-        print(f"Error with normal method: {str(e)}")
+        logger.error(f"Error with normal method: {str(e)}")
         try:
             # Try alternative method with REST API
             url = f"{os.getenv('SUPABASE_URL')}/rest/v1/pickup_requests"
@@ -501,16 +651,20 @@ async def create_pickup_request(
 
             if response.status_code == 201:
                 result = response.json()[0]
-                print(f"Pickup request created successfully with REST API: {result}")
+                logger.debug(
+                    f"Pickup request created successfully with REST API: {result}",
+                )
                 return PickupRequestResponse(**result)
             else:
-                print(f"Error with REST API: {response.status_code} - {response.text}")
+                logger.error(
+                    f"Error with REST API: {response.status_code} - {response.text}",
+                )
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail=f"Failed to create pickup request: {response.text}",
                 )
         except Exception as e2:
-            print(f"Error with alternative method: {str(e2)}")
+            logger.error(f"Error with alternative method: {str(e2)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to create pickup request: {str(e)} | {str(e2)}",
@@ -646,7 +800,7 @@ def calculate_pickup_total(service_items: dict[str, dict[str, int]]) -> float:
     """Calculate total amount from service items with proper pricing"""
 
     total = 0.0
-    print(f"Calculating total for service_items: {service_items}")
+    logger.debug(f"Calculating total for service_items: {service_items}")
 
     for service_type_id, items in service_items.items():
         if service_type_id in SERVICE_ITEM_PRICES:
@@ -655,17 +809,17 @@ def calculate_pickup_total(service_items: dict[str, dict[str, int]]) -> float:
                     item_price = SERVICE_ITEM_PRICES[service_type_id][item_id]["price"]
                     item_total = item_price * quantity
                     total += item_total
-                    print(
+                    logger.debug(
                         f"Service: {service_type_id}, Item: {item_id}, Qty: {quantity}, Price: {item_price}, Total: {item_total}",
                     )
                 else:
-                    print(
+                    logger.debug(
                         f"Warning: Unknown item {item_id} in service {service_type_id}",
                     )
         else:
-            print(f"Warning: Unknown service type {service_type_id}")
+            logger.warning(f"Warning: Unknown service type {service_type_id}")
 
-    print(f"Calculated subtotal: {total}")
+    logger.debug(f"Calculated subtotal: {total}")
     return total
 
 
@@ -701,9 +855,9 @@ async def create_payment(
         calculated_subtotal = calculate_pickup_total(service_items)
         calculated_total_with_tax = calculated_subtotal * 1.08  # Add 8% tax
 
-        print(f"Frontend sent amount: {payment.amount}")
-        print(f"Backend calculated subtotal: {calculated_subtotal}")
-        print(f"Backend calculated total with tax: {calculated_total_with_tax}")
+        logger.debug(f"Frontend sent amount: {payment.amount}")
+        logger.debug(f"Backend calculated subtotal: {calculated_subtotal}")
+        logger.debug(f"Backend calculated total with tax: {calculated_total_with_tax}")
 
         # Use the backend calculated amount for accuracy
         final_amount = calculated_total_with_tax
@@ -752,7 +906,7 @@ async def create_payment(
 
         return Payment(**payment_result)
     except Exception as e:
-        print(f"Error in create_payment: {str(e)}")
+        logger.error(f"Error in create_payment: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Payment processing failed. Please try again later.",
@@ -784,7 +938,7 @@ async def get_payment(
 
         return Payment(**payment)
     except Exception as e:
-        print(f"Error in get_payment: {str(e)}")
+        logger.error(f"Error in get_payment: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve payment information",
@@ -850,7 +1004,7 @@ async def get_invoice_by_payment_id(
 
         return Invoice(**invoice)
     except Exception as e:
-        print(f"Error in get_invoice_by_payment_id: {str(e)}")
+        logger.error(f"Error in get_invoice_by_payment_id: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve invoice information",
@@ -910,11 +1064,11 @@ async def health_check():
     Returns API status and database connectivity
     """
     try:
-        # Test database connection
+        # Test database connection with timeout
         response = supabase.table("laundry_types").select("*").limit(1).execute()
         db_status = "healthy" if response.data is not None else "unhealthy"
 
-        return {
+        health_data = {
             "status": "healthy",
             "timestamp": datetime.utcnow().isoformat(),
             "version": "1.0.0",
@@ -926,8 +1080,12 @@ async def health_check():
                 "payments": "operational",
             },
         }
+
+        logger.info(f"Health check passed: {health_data}")
+        return health_data
+
     except Exception as e:
-        return {
+        error_data = {
             "status": "unhealthy",
             "timestamp": datetime.utcnow().isoformat(),
             "version": "1.0.0",
@@ -939,6 +1097,9 @@ async def health_check():
                 "payments": "unknown",
             },
         }
+
+        logger.error(f"Health check failed: {error_data}")
+        return error_data
 
 
 # Root endpoint

@@ -224,10 +224,10 @@ export default function InvoicePage() {
               </div>
               <div className="text-right">
                 <h2 className="text-2xl font-bold text-blue-600 mb-2">Laundry Service</h2>
-                <p className="text-gray-600">123 Laundry Street</p>
-                <p className="text-gray-600">New York, NY 10001</p>
-                <p className="text-gray-600">contact@laundryservice.com</p>
-                <p className="text-gray-600">(555) 123-4567</p>
+                <p className="text-gray-600">Manipal University Jaipur</p>
+                <p className="text-gray-600">Bagru, Jaipur, 300310</p>
+                <p className="text-gray-600">laundry@gmail.com</p>
+                <p className="text-gray-600">+91 8974998267</p>
               </div>
             </div>
 

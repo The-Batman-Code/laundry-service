@@ -1,4 +1,16 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Ensure API_URL is always absolute
+let API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://laundry-service-production-537a.up.railway.app';
+
+// Add protocol if missing
+if (API_URL && !API_URL.startsWith('http://') && !API_URL.startsWith('https://')) {
+  API_URL = `https://${API_URL}`;
+}
+
+// Debug logging
+if (typeof window !== 'undefined') {
+  console.log('API_URL:', API_URL);
+  console.log('NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
+}
 
 // Types
 export interface User {
