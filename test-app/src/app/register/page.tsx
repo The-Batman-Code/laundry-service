@@ -21,8 +21,10 @@ export default function Register() {
     try {
       await api.register(formData);
       router.push('/login');
-    } catch (err) {
-      setError('Registration failed. Please try again.');
+    } catch (err: any) {
+      // Extract the specific error message from the backend
+      const errorMessage = err.message || 'Registration failed. Please try again.';
+      setError(errorMessage);
     }
   };
 
